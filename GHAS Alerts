@@ -1,0 +1,70 @@
+Great question — when you **enable GitHub Advanced Security (GHAS)** features like code scanning, secret scanning, and push protection at the organization level, here’s **who gets notifications or sees the alerts**:
+
+---
+
+## 🔔 Who Gets Notified or Can See Alerts?
+
+| Feature                    | Who is Notified / Can See?                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Code Scanning Alerts**   | - **Repository admins, write-access users** see alerts in **Security tab** of the repo.                           |
+|                            | - **No email notifications by default** unless configured through Actions or external integrations.               |
+| **Secret Scanning Alerts** | - **Admins and security managers** get alerts in the Security tab.                                                |
+|                            | - If **push protection** is enabled: developers are blocked on push and see a prompt in the Git client or web UI. |
+|                            | - Email notifications go to **repository admins** and optionally **organization security managers**.              |
+| **Push Protection Events** | - Developers attempting to push secrets get **real-time push failure messages**.                                  |
+|                            | - These events are **logged and visible to admins** (if enabled via audit logs in GitHub Enterprise).             |
+
+---
+
+## 👤 Organization Roles That Can See All Alerts
+
+| Role                    | Can View All Repo Alerts | Can Manage GHAS Settings | Receives Notifications |
+| ----------------------- | ------------------------ | ------------------------ | ---------------------- |
+| **Org Owner**           | ✅ Yes                    | ✅ Yes                    | ✅ For security events  |
+| **Security Manager**    | ✅ Yes (all repos)        | ❌ Limited                | ✅ Yes                  |
+| **Repo Admins**         | ✅ Yes (their repos)      | ✅ Yes (repo-level only)  | ✅ Yes                  |
+| **Write Collaborators** | ✅ Yes (their repos)      | ❌ No                     | ❌ Not by default       |
+
+> 🔐 **Security Managers** are a special role you can assign to users/groups to view **security alerts across all repos** even if they’re not collaborators.
+
+---
+
+## 📩 How to Route Alerts or Notifications
+
+You can configure:
+
+* **Slack or Microsoft Teams** notifications via GitHub Apps or Webhooks
+* **Webhook integrations** for code/secret scanning alerts
+* **Custom email alerts** via GitHub Actions or third-party tools
+
+---
+
+## 🔧 Optional: Audit Log Access (Enterprise)
+
+If you're using **GitHub Enterprise**, audit logs will capture:
+
+* Who enabled GHAS
+* When scans were run
+* Which secrets were blocked
+
+These logs are visible to:
+
+* **Enterprise owners**
+* **Org owners with audit log access**
+
+---
+
+## ✅ Recommendation for Admins
+
+* **Assign “Security Manager” role** to yourself or your security team to view alerts across all org repositories.
+* Use **Slack or webhook notifications** for real-time alerting.
+* Review alerts in the **Security tab** on a per-repo basis or use the **organization security overview page**.
+
+---
+
+Let me know if you'd like:
+
+* A GitHub Action to forward alerts to Slack or email
+* A script to bulk-assign the “security manager” role to users
+
+Happy to help streamline your GHAS alerting and monitoring setup.
