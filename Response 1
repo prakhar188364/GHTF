@@ -1,0 +1,166 @@
+Great — as an **admin setting up GitHub Organization-level configuration** using **Terraform**, your goal is to centrally configure:
+
+---
+
+## ✅ What You Can Manage at the Organization Level via Terraform
+
+Here's a checklist of what can be configured using the [GitHub Terraform provider](https://registry.terraform.io/providers/integrations/github/latest):
+
+| **Feature**                                    | **Terraform Resource**                                       | **Notes**                                             |
+| ---------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| Organization Profile                           | `github_organization_settings`                               | Name, description, email, member permissions          |
+| Teams and Memberships                          | `github_team`, `github_team_membership`, `github_membership` | Manage teams and user access                          |
+| Advanced Security (GHAS)                       | `github_repository_security_analysis`                        | Per-repo; must be licensed at enterprise level        |
+| Secret Scanning                                | `github_repository_secret_scanning`                          | Per-repo                                              |
+| Push Protection for Secrets                    | `github_repository_secret_scanning_push_protection`          | Per-repo                                              |
+| Dependabot Alerts & Updates                    | `github_dependabot_security_updates`                         | Per-repo                                              |
+| Branch Protections                             | `github_branch_protection`                                   | Per-branch                                            |
+| Audit Log Streaming (to Datadog, Splunk, etc.) | Not yet supported in Terraform                               | Requires API or UI configuration                      |
+| EMU/SSO/SCIM                                   | Not yet supported in Terraform                               | Set via IdP (Azure AD, Okta); SCIM handled externally |
+
+---
+
+## 🧱 Full Terraform Example for Org-Level Setup
+
+### 1. **Organization Settings**
+
+```hcl
+resource "github_organization_settings" "settings" {
+  name                            = var.github_owner
+  billing_email                   = "admin@example.com"
+  company                         = "My Company"
+  blog                            = "https://example.com/blog"
+  email                           = "support@example.com"
+  twitter_username                = "my_org"
+  location                        = "Remote"
+  description                     = "Infrastructure team GitHub org"
+  has_organization_projects       = true
+  has_repository_projects         = true
+  default_repository_permission   = "read"
+  members_can_create_repositories = false
+  web_commit_signoff_required     = true
+}
+```
+
+---
+
+### 2. **Security Defaults for New Repositories**
+
+You can’t globally enable GHAS across all repos via a single Terraform setting — **GHAS, secret scanning, and push protection must be applied per repo**. You can automate this for all current repos using `for_each`.
+
+```hcl
+data "github_repositories" "all" {
+  query = "org:${var.github_owner}"
+}
+
+resource "github_repository_security_analysis" "ghas" {
+  for_each = toset(data.github_repositories.all.names)
+
+  repository                      = each.key
+  advanced_security               = true
+  secret_scanning                 = true
+  secret_scanning_push_protection = true
+}
+```
+
+---
+
+### 3. **Default Branch Protection Rules**
+
+```hcl
+resource "github_branch_protection" "main_protection" {
+  for_each = toset(data.github_repositories.all.names)
+
+  repository_id  = each.key
+  pattern        = "main"
+
+  enforce_admins = true
+
+  required_status_checks {
+    strict   = true
+    contexts = ["ci/build", "ci/test"]
+  }
+
+  required_pull_request_reviews {
+    dismiss_stale_reviews           = true
+    required_approving_review_count = 2
+  }
+
+  restrictions {
+    users = []
+    teams = ["admins"]
+  }
+}
+```
+
+---
+
+### 4. **Optional: Team Setup for Access Control**
+
+```hcl
+resource "github_team" "admins" {
+  name        = "admins"
+  description = "Org administrators"
+  privacy     = "closed"
+}
+
+resource "github_team_membership" "admin_user" {
+  team_id  = github_team.admins.id
+  username = "your_username"
+  role     = "maintainer"
+}
+```
+
+---
+
+### 5. **Required Variables**
+
+```hcl
+variable "github_token" {
+  type = string
+}
+
+variable "github_owner" {
+  type = string
+}
+```
+
+---
+
+## 🚫 What You Can’t Do Yet in Terraform (as of 2025)
+
+| **Feature**                          | **Notes**                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| **Enable GHAS org-wide**             | Must be applied per repo                                                 |
+| **Enable EMU, SAML SSO, or SCIM**    | Only configurable via GitHub Enterprise settings or IdP (Azure AD, Okta) |
+| **Audit Log Streaming**              | UI/API only                                                              |
+| **Push rules like block force push** | Only via branch protection                                               |
+
+---
+
+## 📦 Project Structure
+
+```
+.
+├── main.tf
+├── variables.tf
+├── terraform.tfvars
+└── outputs.tf
+```
+
+---
+
+## 🛠 Steps to Deploy
+
+1. Set up a **GitHub Personal Access Token** with `admin:org`, `read:org`, `repo`, `security_events`
+2. Initialize Terraform:
+
+   ```bash
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+---
+
+Would you like a GitHub Action that auto-applies this config on new repo creation, or a full bootstrap module for your organization?
