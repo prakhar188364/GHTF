@@ -1,0 +1,197 @@
+Great! Since you're an **admin** and want to use **Terraform** to configure **organization-level settings and security** for a GitHub **organization**, here's a comprehensive guide covering everything you can manage via the [Terraform GitHub provider](https://registry.terraform.io/providers/integrations/github/latest/docs).
+
+---
+
+## ✅ Goal
+
+Configure via Terraform:
+
+* Organization-wide security settings (GHAS, push protection, secret scanning)
+* Default repository settings
+* Member/team permissions
+* Webhook audit/logging (where supported)
+* Other organization-level controls
+
+---
+
+## 📦 Full Terraform Setup for Org-Level Settings
+
+### 🔐 1. **Provider and Variables**
+
+```hcl
+terraform {
+  required_providers {
+    github = {
+      source  = "integrations/github"
+      version = "~> 6.0"
+    }
+  }
+}
+
+provider "github" {
+  token = var.github_token
+  owner = var.github_owner
+}
+
+variable "github_token" {
+  type        = string
+  description = "GitHub personal access token with admin:org scope"
+  sensitive   = true
+}
+
+variable "github_owner" {
+  type        = string
+  description = "GitHub organization name"
+}
+```
+
+---
+
+### 🏢 2. **Organization Settings**
+
+```hcl
+resource "github_organization_settings" "this" {
+  name = var.github_owner
+
+  billing_email         = "admin@example.com"
+  default_repository_permission = "read"
+  members_can_create_repositories = false
+  members_can_create_public_repositories = false
+  members_can_create_private_repositories = true
+  members_can_create_pages = false
+  members_can_create_teams = false
+  web_commit_signoff_required = true
+}
+```
+
+---
+
+### 🛡️ 3. **Enable GHAS (Advanced Security)**
+
+This is **per-repository**, but you can create a module to apply it consistently.
+
+```hcl
+resource "github_repository" "example" {
+  name        = "ghas-repo"
+  visibility  = "private"
+  description = "Example repo with GHAS"
+}
+
+resource "github_repository_security_analysis" "ghas" {
+  repository                         = github_repository.example.name
+  advanced_security                  = true
+  secret_scanning                    = true
+  secret_scanning_push_protection   = true
+}
+```
+
+---
+
+### 🔍 4. **Enable Dependabot Alerts & Security Features (Org Default)**
+
+⚠️ No direct `github_organization_*` resource for GHAS defaults, but you can enforce settings across repos:
+
+```hcl
+resource "github_dependabot_security_updates" "enabled" {
+  repository = github_repository.example.name
+  enabled    = true
+}
+```
+
+---
+
+### 🔐 5. **Push Protection Policy (Org-Wide via Repo Template)**
+
+Can only be applied at the **repo** level. Automate this through templated creation or custom modules:
+
+```hcl
+resource "github_repository_secret_scanning" "scan" {
+  repository = github_repository.example.name
+  enabled    = true
+}
+
+resource "github_repository_secret_scanning_push_protection" "push_protect" {
+  repository = github_repository.example.name
+  enabled    = true
+}
+```
+
+---
+
+### 👥 6. **Team Settings and Permissions**
+
+```hcl
+resource "github_team" "devs" {
+  name        = "developers"
+  description = "Developers team"
+  privacy     = "closed"
+}
+
+resource "github_team_repository" "devs_repo_access" {
+  team_id    = github_team.devs.id
+  repository = github_repository.example.name
+  permission = "push" # pull, push, admin, maintain, triage
+}
+```
+
+---
+
+### 📦 7. **Default Repo Template Setup (Optional)**
+
+To enforce GHAS, Dependabot, branch protection, etc., on all new repos, set up a template repo.
+
+You can write a wrapper module like:
+
+```hcl
+module "secure_repo" {
+  source              = "./modules/secure_repo"
+  name                = "my-secure-repo"
+  enable_advanced_security = true
+  enable_push_protection   = true
+}
+```
+
+---
+
+### 📣 8. **Webhooks and Auditing (Optional)**
+
+```hcl
+resource "github_organization_webhook" "audit" {
+  name   = "audit-logs"
+  config = {
+    url          = "https://my-company.com/audit"
+    content_type = "json"
+    insecure_ssl = "0"
+    secret       = "supersecret"
+  }
+
+  events = ["repository", "member", "team", "org_block"]
+  active = true
+}
+```
+
+---
+
+## 🧠 Notes
+
+* **GHAS defaults** can’t be globally enforced via Terraform yet — you’ll need to use modules or automation to ensure it's applied to every repo.
+* **Push protection** and **secret scanning** are **repo-level**, so use Terraform modules to manage consistently.
+* **EMU (Enterprise Managed Users)** must be configured via the **GitHub Enterprise UI** and your **IdP** (e.g., Azure AD). Terraform doesn’t manage it directly.
+* Ensure your **GitHub token** has `admin:org`, `repo`, `security_events` scopes.
+
+---
+
+## 📁 Optional Enhancements
+
+* CI/CD to auto-apply Terraform changes on `.tf` updates (e.g., via GitHub Actions)
+* Create wrapper modules for common patterns like "secure-private-repo"
+* Enable SSO enforcement for all members (done via GitHub Enterprise settings manually)
+
+---
+
+Would you like:
+
+1. A ready-to-clone GitHub repo with all these Terraform modules?
+2. A secure baseline module for new repositories with GHAS + branch protection + push protection?
+
+Let me know how you'd like to structure the solution.
