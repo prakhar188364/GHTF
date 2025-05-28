@@ -1,0 +1,88 @@
+Yes, there **is a way to enable GHAS (GitHub Advanced Security) across all repositories at the org level** — but only if:
+
+### ✅ You meet these requirements:
+
+* You are using **GitHub Enterprise Cloud**
+* You have **GHAS license enabled for your organization**
+* You are an **organization owner or enterprise admin**
+
+---
+
+## 🔐 Options to Enable GHAS Across All Repositories
+
+### ✅ 1. **GitHub UI (Org Security Settings)**
+
+You can enable GHAS across all existing and future repositories from the GitHub UI:
+
+#### Steps:
+
+1. Go to your **GitHub Organization page**
+2. Click on **Settings** (top-right gear icon)
+3. In the sidebar, click on **"Code security and analysis"**
+4. Under **"GitHub Advanced Security"**, click **Enable for all repositories**
+5. Do the same for:
+
+   * **Secret scanning**
+   * **Push protection for secrets**
+   * **Code scanning (default setup)**
+
+> This will enable GHAS features across **all current and future repositories** in the org.
+
+---
+
+### ✅ 2. **GitHub REST API (Batch Script)**
+
+If you prefer automation outside of Terraform, you can write a script using the [REST API](https://docs.github.com/en/rest/code-security/code-scanning?apiVersion=2022-11-28#update-repository-code-security-and-analysis-settings).
+
+#### Example using `gh` CLI (GitHub CLI):
+
+```bash
+# Authenticate first: gh auth login --scopes admin:org,repo
+org="your-org-name"
+
+gh repo list $org --limit 1000 --json name -q '.[].name' | while read repo; do
+  echo "Enabling GHAS for $repo"
+  gh api \
+    -X PATCH \
+    /repos/$org/$repo \
+    -f security_and_analysis.advanced_security.status='enabled' \
+    -f security_and_analysis.secret_scanning.status='enabled' \
+    -f security_and_analysis.secret_scanning_push_protection.status='enabled'
+done
+```
+
+This script will enable:
+
+* Advanced Security
+* Secret Scanning
+* Push Protection
+
+For all repositories in your org.
+
+---
+
+### 🚫 NOT Available via GitHub GraphQL API or Terraform (Org-level)
+
+As of now:
+
+* GitHub **GraphQL API** does not support enabling GHAS across orgs
+* GitHub **Terraform provider** doesn’t offer org-wide GHAS toggle (only per repo)
+
+---
+
+## 🎯 Summary
+
+| Method                       | Enables GHAS Org-Wide? | Requires GitHub Enterprise | Automatable?     |
+| ---------------------------- | ---------------------- | -------------------------- | ---------------- |
+| ✅ GitHub UI                  | ✅ Yes                  | ✅ Yes                      | ❌ Manual         |
+| ✅ GitHub CLI Script (gh/api) | ✅ Yes                  | ✅ Yes                      | ✅ Yes            |
+| ❌ Terraform                  | ❌ No (per repo only)   | N/A                        | ✅ Yes (per repo) |
+
+---
+
+Would you like:
+
+* A ready-made bash script to batch enable GHAS?
+* A GitHub Action workflow to auto-enable GHAS on new repo creation?
+
+Let me know your preferred automation style.
