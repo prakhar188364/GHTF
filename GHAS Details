@@ -1,0 +1,113 @@
+Great question — **you cannot enable GHAS (GitHub Advanced Security) at the organization level via Terraform directly** as of now.
+
+However, here's what you can (and **can't**) do, and how to handle it **as an admin across all repositories**:
+
+---
+
+## ❌ What You **Cannot** Do (Today via Terraform)
+
+* You **cannot globally enable GHAS at the org level** via Terraform.
+* GitHub does **not provide an org-level Terraform resource** (like `github_organization_advanced_security`) to enforce GHAS across all repos.
+
+---
+
+## ✅ What You **Can** Do
+
+### 🔁 1. **Loop over All Repositories to Enable GHAS**
+
+Terraform **can** iterate over all repositories in the organization and apply GHAS settings individually:
+
+```hcl
+data "github_repositories" "all" {}
+
+resource "github_repository_security_analysis" "ghas" {
+  for_each = {
+    for repo in data.github_repositories.all.names : repo => repo
+  }
+
+  repository                         = each.key
+  advanced_security                  = true
+  secret_scanning                    = true
+  secret_scanning_push_protection   = true
+}
+```
+
+> ⚠️ You need to **import** all existing repositories into Terraform state before applying this.
+
+---
+
+### 🔄 2. **Automate Future Repos via Terraform Modules or CI**
+
+Use a wrapper module to **enforce GHAS on all future repos**:
+
+```hcl
+module "secure_repo" {
+  source  = "./modules/repo_with_ghas"
+  name    = "new-repo-name"
+}
+```
+
+---
+
+### 🔍 3. **Use GitHub Organization Policies (Manual via UI/API)**
+
+GitHub Enterprise Cloud lets you create **organization-level policies** (via the UI or GitHub API) to:
+
+* Require GHAS for all private repos
+* Block disabling secret scanning / push protection
+
+> These policies are managed via **GitHub Enterprise Managed Users (EMU)** or the **API/UI**, not Terraform currently.
+
+---
+
+### 🧪 4. **Experimental: GitHub REST API via `null_resource`**
+
+If you're feeling advanced, you can **call the GitHub API** using a `null_resource` + `local-exec` like this:
+
+```hcl
+resource "null_resource" "ghas_enabler" {
+  for_each = toset(data.github_repositories.all.names)
+
+  provisioner "local-exec" {
+    command = <<EOT
+    curl -X PATCH \
+      -H "Authorization: token ${var.github_token}" \
+      -H "Accept: application/vnd.github+json" \
+      https://api.github.com/repos/${var.github_owner}/${each.key} \
+      -d '{"security_and_analysis":{"advanced_security":{"status":"enabled"}}}'
+    EOT
+  }
+}
+```
+
+⚠️ This is **non-declarative** and not ideal for Terraform state management, but it's a workaround.
+
+---
+
+## ✅ Recommendation (for Admins)
+
+| Approach                               | Description                                                        |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| ✅ Terraform with loop/module           | Best for managing GHAS across all existing repos                   |
+| ✅ Template modules for new repos       | Ensures all future repos have GHAS                                 |
+| ✅ GitHub UI policies (Enterprise only) | Use the GitHub UI to enforce GHAS org-wide (not via Terraform yet) |
+| ❌ Org-level GHAS in Terraform          | Not supported                                                      |
+| ⚠️ API + null\_resource                | Hacky workaround if needed                                         |
+
+---
+
+## 🔜 Future Readiness
+
+GitHub may introduce an org-level GHAS enforcement API or Terraform support in future updates. You can watch:
+
+* [Terraform GitHub Provider GitHub](https://github.com/integrations/terraform-provider-github/issues)
+* [GitHub Enterprise Features Roadmap](https://github.com/orgs/github/projects/424)
+
+---
+
+Would you like:
+
+* A working `.tf` example with `for_each` over `data.github_repositories`?
+* A GHAS-enforcing module template for future repositories?
+
+Let me know!
